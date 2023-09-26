@@ -11,5 +11,7 @@ diesel::table! {
         display_name -> Nullable<Varchar>,
         #[max_length = 255]
         email -> Varchar,
+        #[max_length = 255]
+        password -> Varchar,
     }
 }
