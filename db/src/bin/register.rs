@@ -1,4 +1,5 @@
-use login_api::establish_connection;
+use db::{establish_connection, models::User, schema::users::dsl::users};
+use diesel::{insert_into, RunQueryDsl};
 use rpassword::prompt_password;
 use text_io::read;
 
@@ -26,4 +27,17 @@ fn main() {
 
     print!("Enter display name (optional): ");
     let display_name: String = read!();
+
+    let user = User {
+        first_name: Some(first_name),
+        last_name: Some(last_name),
+        display_name: Some(display_name),
+        email,
+        password,
+    };
+
+    insert_into(users)
+        .values(user)
+        .execute(connection)
+        .expect("Registration failed.");
 }
