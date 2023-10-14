@@ -1,4 +1,1 @@
-## Login API created with Axum & Diesel
-
-### Commands 
-- cargo run --bin list_users
+## Password Manager created with Axum & Diesel & Tauri & Solid.js
