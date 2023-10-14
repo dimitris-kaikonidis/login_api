@@ -1,7 +1,8 @@
 use crate::schema::users;
 use diesel::{pg::Pg, prelude::Insertable, Queryable, Selectable};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Queryable, Selectable, Insertable)]
+#[derive(Debug, Queryable, Selectable, Insertable, Serialize, Deserialize)]
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(Pg))]
 pub struct User {
