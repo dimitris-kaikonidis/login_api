@@ -1,17 +1,29 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    users (id) {
+    passwords (id) {
         id -> Int4,
         #[max_length = 255]
-        first_name -> Nullable<Varchar>,
+        name -> Varchar,
         #[max_length = 255]
-        last_name -> Nullable<Varchar>,
-        #[max_length = 255]
-        display_name -> Nullable<Varchar>,
+        password -> Varchar,
+        user_id -> Nullable<Int4>,
+    }
+}
+
+diesel::table! {
+    users (id) {
+        id -> Int4,
         #[max_length = 255]
         email -> Varchar,
         #[max_length = 255]
         password -> Varchar,
     }
 }
+
+diesel::joinable!(passwords -> users (user_id));
+
+diesel::allow_tables_to_appear_in_same_query!(
+    passwords,
+    users,
+);

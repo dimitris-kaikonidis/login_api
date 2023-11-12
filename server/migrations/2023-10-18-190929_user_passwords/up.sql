@@ -1,0 +1,7 @@
+-- Your SQL goes here
+CREATE TABLE passwords(
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) UNIQUE NOT NULL,
+  password  VARCHAR(255) UNIQUE NOT NULL,
+  user_id INT REFERENCES users(id) ON DELETE CASCADE
+);
