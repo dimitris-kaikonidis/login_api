@@ -1,15 +1,17 @@
 /* @refresh reload */
 import { Component } from "solid-js";
 import { render } from "solid-js/web";
-import { RegisterForm } from "./register-form";
+import { AuthForm } from "./auth-form";
 
 const login = async () => {
   const res = await fetch("http://localhost:3000/login", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify({
-      email: "EMAIL",
-      password: "password",
+      email: "dim@g.c",
+      password: "kai",
     }),
   });
 
@@ -23,9 +25,9 @@ const App: Component = () => {
   })();
 
   return (
-    <>
-      <RegisterForm />
-    </>
+    <main class="h-screen flex justify-center items-center bg-sky-800">
+      <AuthForm action="register" />
+    </main>
   );
 };
 

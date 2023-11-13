@@ -1,4 +1,4 @@
-use actions::{authenticate_user, create_password, insert_user};
+use actions::{create_password, login, register};
 use axum::{
     http::{header::CONTENT_TYPE, HeaderValue, Method},
     routing::post,
@@ -38,8 +38,8 @@ async fn main() {
         .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap());
 
     let app = Router::new()
-        .route("/register", post(insert_user))
-        .route("/login", post(authenticate_user))
+        .route("/register", post(register))
+        .route("/login", post(login))
         .route("/create_password", post(create_password))
         .with_state(pool)
         .layer(cors)
