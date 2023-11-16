@@ -13,8 +13,10 @@ use std::{env, net::SocketAddr};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 mod actions;
+mod error;
 mod models;
 mod schema;
+mod utils;
 
 fn connection_pool() -> Pool<ConnectionManager<PgConnection>> {
     dotenv().ok();

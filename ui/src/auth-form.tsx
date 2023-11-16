@@ -32,7 +32,7 @@ export const AuthForm: Component<AuthFormProps> = ({ action }) => {
         body: JSON.stringify(fields),
       });
 
-      console.log(response);
+      console.log("here", await response.json());
     } catch (error) {
       console.error(error);
     }
