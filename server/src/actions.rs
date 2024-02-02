@@ -20,12 +20,17 @@ pub async fn register(
     Json(mut user): Json<User>,
 ) -> Result<(StatusCode, Json<AuthBody>), ActionError> {
     let connection = &mut pool.get()?;
-    hash_user_password(&mut user)?;
 
-    match insert_into(users_table).values(&user).execute(connection) {
-        Ok(_) => Ok((StatusCode::CREATED, generate_token(user)?)),
-        Err(_) => Err(ActionError::BadRequest),
-    }
+    println!("{user:?}");
+
+    // hash_user_password(&mut user)?;
+    //
+    // match insert_into(users_table).values(&user).execute(connection) {
+    //     Ok(_) => Ok((StatusCode::CREATED, generate_token(user)?)),
+    //     Err(_) => Err(ActionError::BadRequest),
+    // }
+
+    todo!()
 }
 
 pub async fn login(

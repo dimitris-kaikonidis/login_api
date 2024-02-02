@@ -6,11 +6,19 @@ use jwt_simple::prelude::{Claims, Duration, HS256Key, MACLike};
 use rand::rngs::OsRng;
 use serde::Serialize;
 
+const N: u128 = 500;
+const g: u8 = 2;
+
 pub fn hash_user_password(user: &mut User) -> Result<(), ActionError> {
     let argon2 = Argon2::default();
     let salt = SaltString::generate(&mut OsRng);
     let password = argon2.hash_password(user.password.as_bytes(), &salt)?;
     user.password = password.to_string();
+
+    println!("{password}");
+    println!("{}", password.to_string().parse::<u128>().unwrap());
+
+    // let verifier = g ^ password % N;
 
     Ok(())
 }

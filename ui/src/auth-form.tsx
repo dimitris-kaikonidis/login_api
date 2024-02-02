@@ -1,5 +1,6 @@
 import { Component } from "solid-js";
 import { createStore } from "solid-js/store";
+import { verifier } from "./utils";
 
 type AuthFormFields = {
   email: string;
@@ -29,10 +30,8 @@ export const AuthForm: Component<AuthFormProps> = ({ action }) => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(fields),
+        body: JSON.stringify(await encryptData(JSON.stringify(fields))),
       });
-
-      console.log("here", await response.json());
     } catch (error) {
       console.error(error);
     }

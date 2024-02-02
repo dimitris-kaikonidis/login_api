@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "hash-wasm": "^4.11.0",
     "solid-js": "^1.7.8"
   },
   "devDependencies": {
