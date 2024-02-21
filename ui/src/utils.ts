@@ -1,31 +1,6 @@
 import { argon2id } from "hash-wasm";
 
-const algorithm = {
-  name: "AES-GCM",
-  length: 256,
-};
-
-const encryptData = async (data: string): Promise<Uint8Array> => {
-  const key = await crypto.subtle.generateKey(algorithm, true, [
-    "encrypt",
-    "decrypt",
-  ]);
-  const initVec = crypto.getRandomValues(new Uint8Array(16));
-  const encodedData = new TextEncoder().encode(data);
-
-  const ciphertextBuffer = await crypto.subtle.encrypt(
-    {
-      name: "AES-GCM",
-      iv: initVec,
-    },
-    key,
-    encodedData,
-  );
-
-  return new Uint8Array(ciphertextBuffer);
-};
-
-const generateSalt = (): string => {
+export const generateSalt = (): string => {
   const byteLength = 16;
   const buffer = new Uint8Array(byteLength);
   crypto.getRandomValues(buffer);
@@ -42,12 +17,18 @@ const group4096 = groupHex4096bit
   .map((h) => BigInt("0x" + h))
   .reduce((i, s) => i + s);
 
-const keyDerivationFn = async (password: string): Promise<string> => {
+const keyDerivationFn = async ({
+  password,
+  salt,
+}: {
+  password: string;
+  salt: string;
+}): Promise<string> => {
   const encoder = new TextEncoder();
   const buffer = encoder.encode(password);
   const hash = await argon2id({
     password: buffer,
-    salt: generateSalt(),
+    salt,
     parallelism: 1,
     iterations: 256,
     memorySize: 512,
@@ -73,8 +54,14 @@ const modExp = (base: bigint, exponent: bigint, modulus: bigint) => {
   return result;
 };
 
-export const verifier = async (password: string) => {
-  const [g, x, N] = [5n, await keyDerivationFn(password), group4096];
+export const generateVerifier = async ({
+  password,
+  salt,
+}: {
+  password: string;
+  salt: string;
+}) => {
+  const [g, x, N] = [5n, await keyDerivationFn({ password, salt }), group4096];
 
-  return modExp(g, BigInt("0x" + x), N);
+  return modExp(g, BigInt("0x" + x), N).toString() + "n";
 };

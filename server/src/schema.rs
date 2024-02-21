@@ -17,7 +17,9 @@ diesel::table! {
         #[max_length = 255]
         email -> Varchar,
         #[max_length = 255]
-        password -> Varchar,
+        verifier -> Varchar,
+        #[max_length = 255]
+        salt -> Varchar,
     }
 }
 

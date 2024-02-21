@@ -9,19 +9,19 @@ use serde::Serialize;
 const N: u128 = 500;
 const g: u8 = 2;
 
-pub fn hash_user_password(user: &mut User) -> Result<(), ActionError> {
-    let argon2 = Argon2::default();
-    let salt = SaltString::generate(&mut OsRng);
-    let password = argon2.hash_password(user.password.as_bytes(), &salt)?;
-    user.password = password.to_string();
-
-    println!("{password}");
-    println!("{}", password.to_string().parse::<u128>().unwrap());
-
-    // let verifier = g ^ password % N;
-
-    Ok(())
-}
+// pub fn hash_user_password(user: &mut User) -> Result<(), ActionError> {
+//     let argon2 = Argon2::default();
+//     let salt = SaltString::generate(&mut OsRng);
+//     let password = argon2.hash_password(user.verifier.as_bytes(), &salt)?;
+//     user.verifier = password.to_string();
+//
+//     println!("{password}");
+//     println!("{}", password.to_string().parse::<u128>().unwrap());
+//
+//     // let verifier = g ^ password % N;
+//
+//     Ok(())
+// }
 
 #[derive(Debug, Serialize)]
 pub struct AuthBody {
@@ -31,7 +31,7 @@ pub struct AuthBody {
 
 pub fn verify_user_password(password: String, user: User) -> Result<Json<AuthBody>, ActionError> {
     let parsed_hash = PasswordHash::new(&password)?;
-    Argon2::default().verify_password(user.password.as_bytes(), &parsed_hash)?;
+    Argon2::default().verify_password(user.verifier.as_bytes(), &parsed_hash)?;
     Ok(generate_token(user)?)
 }
 

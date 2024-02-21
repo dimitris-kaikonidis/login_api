@@ -1,6 +1,6 @@
 import { Component } from "solid-js";
 import { createStore } from "solid-js/store";
-import { verifier } from "./utils";
+import { generateSalt, generateVerifier } from "./utils";
 
 type AuthFormFields = {
   email: string;
@@ -25,13 +25,27 @@ export const AuthForm: Component<AuthFormProps> = ({ action }) => {
         throw new Error("Invalid Fields");
       }
 
+      const salt = generateSalt();
+      const verifier = await generateVerifier({
+        password: fields.password,
+        salt,
+      });
+
+      console.log(salt);
+
       const response = await fetch(`http://localhost:3000/${action}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(await encryptData(JSON.stringify(fields))),
+        body: JSON.stringify({
+          email: fields.email,
+          verifier,
+          salt,
+        }),
       });
+
+      console.log(response);
     } catch (error) {
       console.error(error);
     }

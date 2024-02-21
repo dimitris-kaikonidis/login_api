@@ -4,9 +4,9 @@ use crate::{
     schema::{
         passwords::table as passwords_table,
         users::table as users_table,
-        users::{email as email_column, password as password_column},
+        users::{email as email_column, verifier as verifier_column},
     },
-    utils::{generate_token, hash_user_password, verify_user_password, AuthBody},
+    utils::{verify_user_password, AuthBody},
 };
 use axum::{extract::State, http::StatusCode, Json};
 use diesel::{
@@ -14,12 +14,15 @@ use diesel::{
     r2d2::{ConnectionManager, Pool},
     ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl,
 };
+use srp::groups::G_4096;
 
 pub async fn register(
     State(pool): State<Pool<ConnectionManager<PgConnection>>>,
     Json(mut user): Json<User>,
 ) -> Result<(StatusCode, Json<AuthBody>), ActionError> {
     let connection = &mut pool.get()?;
+
+    let grp_4096 = G_4096.n;
 
     println!("{user:?}");
 
@@ -41,7 +44,7 @@ pub async fn login(
 
     match users_table
         .filter(email_column.eq(&user.email))
-        .select(password_column)
+        .select(verifier_column)
         .get_result::<String>(connection)
     {
         Ok(password) => Ok((StatusCode::OK, verify_user_password(password, user)?)),

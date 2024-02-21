@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 #[diesel(check_for_backend(Pg))]
 pub struct User {
     pub email: String,
-    pub password: String,
+    pub verifier: String,
+    pub salt: String,
 }
 
 #[derive(Debug, Queryable, Selectable, Insertable, Serialize, Deserialize)]
