@@ -1,54 +1,23 @@
-import { Component } from "solid-js";
-import { createStore } from "solid-js/store";
-import { generateSalt, generateVerifier } from "./utils";
-
-type AuthFormFields = {
-  email: string;
-  password: string;
-};
+import { Component, createSignal } from "solid-js";
+import { invoke } from "@tauri-apps/api";
 
 type AuthFormProps = {
   action: "login" | "register";
 };
 
-export const AuthForm: Component<AuthFormProps> = ({ action }) => {
-  const [fields, setFields] = createStore<AuthFormFields>({
-    email: "",
-    password: "",
-  });
+export const AuthForm: Component<AuthFormProps> = () => {
+  const [email, setEmail] = createSignal<string>();
+  const [password, setPassword] = createSignal<string>();
 
   const onSubmit = async (event: SubmitEvent) => {
     event.preventDefault();
 
-    try {
-      if (!fields.email || !fields.password) {
-        throw new Error("Invalid Fields");
-      }
+    const res = await invoke("handle_submit", {
+      username: email(),
+      password: password(),
+    });
 
-      const salt = generateSalt();
-      const verifier = await generateVerifier({
-        password: fields.password,
-        salt,
-      });
-
-      console.log(salt);
-
-      const response = await fetch(`http://localhost:3000/${action}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: fields.email,
-          verifier,
-          salt,
-        }),
-      });
-
-      console.log(response);
-    } catch (error) {
-      console.error(error);
-    }
+    console.log(res);
   };
 
   return (
@@ -61,14 +30,14 @@ export const AuthForm: Component<AuthFormProps> = ({ action }) => {
         name="email"
         type="email"
         placeholder="Email"
-        onInput={(e) => setFields("email", e.currentTarget.value)}
+        onInput={(e) => setEmail(e.currentTarget.value)}
       />
       <input
         class="rounded-md p-2"
         name="password"
         type="password"
         placeholder="Password"
-        onInput={(e) => setFields("password", e.currentTarget.value)}
+        onInput={(e) => setPassword(e.currentTarget.value)}
       />
       <button
         class="border outline-white rounded-md text-white bg-sky-900 p-2"
