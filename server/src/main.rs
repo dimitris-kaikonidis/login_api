@@ -2,7 +2,7 @@ use actions::{create_password, login, register};
 use axum::{
     http::{header::CONTENT_TYPE, HeaderValue, Method},
     routing::post,
-    Router, Server,
+    Router,
 };
 use diesel::{
     r2d2::{ConnectionManager, Pool},
@@ -47,9 +47,6 @@ async fn main() {
         .layer(cors)
         .layer(TraceLayer::new_for_http());
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, app).await.unwrap()
 }

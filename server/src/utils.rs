@@ -3,7 +3,6 @@ use crate::models::User;
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::Json;
 use jwt_simple::prelude::{Claims, Duration, HS256Key, MACLike};
-use rand::rngs::OsRng;
 use serde::Serialize;
 
 const N: u128 = 500;

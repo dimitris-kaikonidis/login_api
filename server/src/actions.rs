@@ -14,15 +14,12 @@ use diesel::{
     r2d2::{ConnectionManager, Pool},
     ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl,
 };
-use srp::groups::G_4096;
 
 pub async fn register(
     State(pool): State<Pool<ConnectionManager<PgConnection>>>,
     Json(mut user): Json<User>,
 ) -> Result<(StatusCode, Json<AuthBody>), ActionError> {
     let connection = &mut pool.get()?;
-
-    let grp_4096 = G_4096.n;
 
     println!("{user:?}");
 
