@@ -16,7 +16,7 @@ diesel::table! {
         id -> Int4,
         #[max_length = 255]
         email -> Varchar,
-        #[max_length = 255]
+        #[max_length = 2000]
         verifier -> Varchar,
         #[max_length = 255]
         salt -> Varchar,

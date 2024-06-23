@@ -1,46 +1,28 @@
 use super::error::ActionError;
-use crate::models::User;
-use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use axum::Json;
-use jwt_simple::prelude::{Claims, Duration, HS256Key, MACLike};
-use serde::Serialize;
+use argon2::{password_hash::Salt, Argon2, PasswordHasher};
+use num_bigint::BigUint;
+use srp::groups::G_4096;
 
-const N: u128 = 500;
-const g: u8 = 2;
+pub fn compute_server_value_b(
+    salt: &str,
+    v: &str,
+    private_b: &BigUint,
+) -> Result<String, ActionError> {
+    let g = &G_4096.g;
+    let n = &G_4096.n;
 
-// pub fn hash_user_password(user: &mut User) -> Result<(), ActionError> {
-//     let argon2 = Argon2::default();
-//     let salt = SaltString::generate(&mut OsRng);
-//     let password = argon2.hash_password(user.verifier.as_bytes(), &salt)?;
-//     user.verifier = password.to_string();
-//
-//     println!("{password}");
-//     println!("{}", password.to_string().parse::<u128>().unwrap());
-//
-//     // let verifier = g ^ password % N;
-//
-//     Ok(())
-// }
+    let argon2 = Argon2::default();
+    let k = argon2.hash_password(&(g + n).to_bytes_be(), Salt::from_b64(salt)?)?;
+    let k = match k.hash {
+        Some(hash) => hash,
+        None => return Err(ActionError::InternalServerError),
+    };
+    let k = k.as_bytes();
+    let k = BigUint::from_bytes_be(&k);
 
-#[derive(Debug, Serialize)]
-pub struct AuthBody {
-    access_token: String,
-    token_type: String,
-}
+    let v = BigUint::from_bytes_be(v.as_bytes());
 
-pub fn verify_user_password(password: String, user: User) -> Result<Json<AuthBody>, ActionError> {
-    let parsed_hash = PasswordHash::new(&password)?;
-    Argon2::default().verify_password(user.verifier.as_bytes(), &parsed_hash)?;
-    Ok(generate_token(user)?)
-}
+    let public_b = k * v * g.modpow(&private_b, n);
 
-pub fn generate_token(user: User) -> Result<Json<AuthBody>, jwt_simple::Error> {
-    let claims = Claims::with_custom_claims(user, Duration::from_mins(10));
-    let key = HS256Key::generate();
-    let token = key.authenticate(claims)?;
-
-    Ok(Json(AuthBody {
-        access_token: token,
-        token_type: "Bearer".to_string(),
-    }))
+    Ok(public_b.to_string())
 }

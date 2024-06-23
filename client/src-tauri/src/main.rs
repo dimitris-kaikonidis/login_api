@@ -2,8 +2,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
-use num_bigint::BigUint;
-use rand::rngs::OsRng;
+use num_bigint::{BigUint, RandomBits};
+use rand::{rngs::OsRng, Rng};
 use srp::groups::G_4096;
 
 fn generate_salt() -> SaltString {
@@ -20,7 +20,7 @@ fn hash_password<'a>(
 }
 
 #[tauri::command]
-fn handle_submit(username: &str, password: &str) -> String {
+fn create_salt_and_verifier(password: &str) -> (String, String) {
     let salt = generate_salt();
     let g = &G_4096.g;
     let n = &G_4096.n;
@@ -30,16 +30,29 @@ fn handle_submit(username: &str, password: &str) -> String {
         .unwrap()
         .as_bytes()
         .to_owned();
-
     let password_hash_big_uint = BigUint::from_bytes_be(&password_hash);
     let v = g.modpow(&password_hash_big_uint, n);
 
-    todo!()
+    (salt.to_string(), v.to_string())
+}
+
+#[tauri::command]
+fn compute_client_value_a() -> String {
+    let g = &G_4096.g;
+    let n = &G_4096.n;
+    let mut rng = rand::thread_rng();
+    let private_a: BigUint = rng.sample(RandomBits::new(256));
+    let public_a = g.modpow(&private_a, n);
+
+    public_a.to_string()
 }
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![handle_submit])
+        .invoke_handler(tauri::generate_handler![
+            create_salt_and_verifier,
+            compute_client_value_a
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

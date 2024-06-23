@@ -39,9 +39,3 @@ impl From<PoolError> for ActionError {
         ActionError::InternalServerError
     }
 }
-
-impl From<jwt_simple::Error> for ActionError {
-    fn from(_value: jwt_simple::Error) -> Self {
-        ActionError::InternalServerError
-    }
-}

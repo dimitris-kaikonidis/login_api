@@ -8,8 +8,6 @@ use diesel::{
     r2d2::{ConnectionManager, Pool},
     PgConnection,
 };
-use dotenvy::dotenv;
-use std::{env, net::SocketAddr};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 mod actions;
@@ -19,9 +17,9 @@ mod schema;
 mod utils;
 
 fn connection_pool() -> Pool<ConnectionManager<PgConnection>> {
-    dotenv().ok();
+    dotenvy::dotenv().ok();
 
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let manager = ConnectionManager::<PgConnection>::new(database_url);
 
     Pool::builder()
@@ -37,7 +35,7 @@ async fn main() {
     let cors = CorsLayer::new()
         .allow_headers([CONTENT_TYPE])
         .allow_methods([Method::GET, Method::POST])
-        .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap());
+        .allow_origin("http://localhost:1420".parse::<HeaderValue>().unwrap());
 
     let app = Router::new()
         .route("/register", post(register))
@@ -48,5 +46,6 @@ async fn main() {
         .layer(TraceLayer::new_for_http());
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    println!("Listening on: http://{}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap()
 }

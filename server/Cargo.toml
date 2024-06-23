@@ -17,6 +17,7 @@ axum-macros = "0.4.1"
 tower-http = { version = "0.5.2", features = ["cors", "trace"] }
 tower = "0.4.13"
 argon2 = "0.5.3"
-jwt-simple = "0.11.9"
 aes-gcm = "0.10.3"
 srp = "0.6.0"
+rand = { version = "0.8.5", features = ["getrandom"] }
+num-bigint = { version = "0.4.5", features = ["rand"] }
