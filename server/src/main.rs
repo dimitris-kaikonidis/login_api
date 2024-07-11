@@ -1,20 +1,20 @@
-use actions::{create_password, login, register};
+use actions::{create_password, login_connection, register};
 use axum::{
     http::{header::CONTENT_TYPE, HeaderValue, Method},
-    routing::post,
+    routing::{get, post},
     Router,
 };
 use diesel::{
     r2d2::{ConnectionManager, Pool},
     PgConnection,
 };
+use std::net::SocketAddr;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 mod actions;
 mod error;
 mod models;
 mod schema;
-mod utils;
 
 fn connection_pool() -> Pool<ConnectionManager<PgConnection>> {
     dotenvy::dotenv().ok();
@@ -39,7 +39,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/register", post(register))
-        .route("/login", post(login))
+        .route("/login", get(login_connection))
         .route("/create_password", post(create_password))
         .with_state(pool)
         .layer(cors)
@@ -47,5 +47,10 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Listening on: http://{}", listener.local_addr().unwrap());
-    axum::serve(listener, app).await.unwrap()
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .unwrap()
 }

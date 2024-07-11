@@ -8,10 +8,10 @@ export const RegisterForm: Component = () => {
   const onSubmit = async (event: SubmitEvent) => {
     event.preventDefault();
 
-    const [salt, verifier] = await invoke<[string, string]>(
+    const [salt, verifier] = await invoke<[number[], number[]]>(
       "create_salt_and_verifier",
       {
-        email: email(),
+        username: email(),
         password: password(),
       },
     );
@@ -61,27 +61,51 @@ export const RegisterForm: Component = () => {
 
 export const LoginForm: Component = () => {
   const [email, setEmail] = createSignal<string>();
-  const [_password, setPassword] = createSignal<string>();
+  const [password, setPassword] = createSignal<string>();
 
   const onSubmit = async (event: SubmitEvent) => {
     event.preventDefault();
 
-    const publicA = await invoke<string>("compute_client_value_a");
+    const ws = new WebSocket("ws://localhost:3000/login");
+    const public_a = await invoke<number[]>("public_a");
 
-    const response = await fetch(`http://localhost:3000/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email: email(),
-        public_value_a: publicA,
-      }),
+    if (ws.readyState === 1) {
+      ws.send(JSON.stringify({ email: email() }));
+      ws.send(JSON.stringify(public_a));
+    }
+
+    ws.addEventListener("message", async (event) => {
+      const data = JSON.parse(event.data);
+
+      switch (data.type) {
+        case "first_step_server":
+          const clientProof = await invoke<number[]>("compute_verifier", {
+            username: email(),
+            password: password(),
+            salt: data.salt,
+            publicB: data.public_b,
+          });
+
+          ws.send(JSON.stringify(clientProof));
+
+          break;
+
+        case "second_step_server":
+          console.log(data);
+
+          const res = await invoke("verify_server_proof", {
+            serverProof: data.server_proof,
+          });
+
+          console.log(res);
+
+          break;
+      }
     });
 
-    const { public_b: publicB }: { public_b: string } = await response.json();
-
-    // const premasterSecret = ( publicB  -  ()) ;
+    ws.addEventListener("close", () => {
+      console.log("disconnected");
+    });
   };
 
   return (

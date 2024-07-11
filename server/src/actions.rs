@@ -3,22 +3,31 @@ use crate::{
     models::{Password, User},
     schema::{
         passwords::table as passwords_table,
-        users::table as users_table,
-        users::{email as email_column, salt as salt_column, verifier as verifier_column},
+        users::{
+            email as email_column, salt as salt_column, table as users_table,
+            verifier as verifier_column,
+        },
     },
-    utils::compute_server_value_b,
 };
-use argon2::{password_hash::Salt, Argon2, PasswordHasher};
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        State,
+    },
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use blake2::Blake2b512;
 use diesel::{
     insert_into,
     r2d2::{ConnectionManager, Pool},
     ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl,
 };
-use num_bigint::{BigUint, RandomBits};
-use rand::Rng;
+use futures::StreamExt;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
-use srp::groups::G_4096;
+use srp::{groups::G_4096, server::SrpServer};
 
 pub async fn register(
     State(pool): State<Pool<ConnectionManager<PgConnection>>>,
@@ -32,59 +41,93 @@ pub async fn register(
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LoginData {
-    email: String,
-    public_value_a: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LoginResponse {
-    public_b: String,
-}
-
-pub async fn login(
+pub async fn login_connection(
     State(pool): State<Pool<ConnectionManager<PgConnection>>>,
-    Json(user): Json<LoginData>,
-) -> Result<Json<LoginResponse>, ActionError> {
-    let connection = &mut pool.get()?;
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
+    ws.on_failed_upgrade(|_| println!("Failed to upgrade WebSocket connection"))
+        .on_upgrade(move |socket| login_auth(socket, pool))
+}
 
-    match users_table
-        .filter(email_column.eq(&user.email))
+#[derive(Deserialize, Debug)]
+struct UserID {
+    email: String,
+}
+
+#[derive(Serialize, Debug)]
+struct FirstStepServer<'a> {
+    #[serde(rename = "type")]
+    __type: String,
+    #[serde(with = "serde_bytes")]
+    salt: &'a [u8],
+    #[serde(with = "serde_bytes")]
+    public_b: &'a [u8],
+}
+
+#[derive(Serialize, Debug)]
+struct SecondStepServer<'a> {
+    #[serde(rename = "type")]
+    __type: String,
+    #[serde(with = "serde_bytes")]
+    pub server_proof: &'a [u8],
+}
+
+pub async fn login_auth(mut ws: WebSocket, pool: Pool<ConnectionManager<PgConnection>>) {
+    let user_id = ws.next().await.unwrap().unwrap();
+    let user_id = user_id.to_text().unwrap();
+    let user_id = serde_json::from_str::<UserID>(user_id).expect("Invalid JSON (UserEmail)");
+
+    let connection = &mut pool.get().expect("Failed to connect to database");
+
+    let (salt, v) = users_table
+        .filter(email_column.eq(&user_id.email))
         .select((salt_column, verifier_column))
-        .get_result::<(String, String)>(connection)
-    {
-        Ok((salt, verifier)) => {
-            let mut rng = rand::thread_rng();
-            let private_b: BigUint = rng.sample(RandomBits::new(256));
-            let public_b = compute_server_value_b(&salt, &verifier, &private_b)?;
-            let n = &G_4096.n;
+        .get_result::<(Vec<u8>, Vec<u8>)>(connection)
+        .expect("User not found");
 
-            let mut concanted_ab = Vec::new();
-            concanted_ab.extend_from_slice(user.public_value_a.as_bytes());
-            concanted_ab.extend_from_slice(public_b.as_bytes());
+    let mut private_b = [0u8; 32];
+    let mut rng = rand::rngs::OsRng;
+    rng.fill_bytes(&mut private_b);
+    let srp_server = SrpServer::<Blake2b512>::new(&G_4096);
+    let public_b = srp_server.compute_public_ephemeral(&private_b, &v);
 
-            let argon2 = Argon2::default();
+    let first_step_server = FirstStepServer {
+        __type: "first_step_server".to_string(),
+        salt: &salt,
+        public_b: &public_b,
+    };
+    let first_step_server = serde_json::to_string(&first_step_server).unwrap();
 
-            let u = argon2.hash_password(&concanted_ab, Salt::from_b64(&salt)?)?;
-            let u = match u.hash {
-                Some(hash) => hash,
-                None => return Err(ActionError::InternalServerError),
-            };
-            let u = u.as_bytes();
-            let u = BigUint::from_bytes_be(&u);
+    ws.send(Message::Text(first_step_server))
+        .await
+        .expect("Failed to send first step (server) to client");
 
-            let public_a = BigUint::from_bytes_be(user.public_value_a.as_bytes());
-            let verifier = BigUint::from_bytes_be(verifier.as_bytes());
+    let public_a = ws.next().await.unwrap().unwrap();
+    let public_a = serde_json::from_slice::<Vec<u8>>(&public_a.into_data())
+        .expect("Failed to deserialize public_a");
 
-            let premaster_secret = (public_a * verifier ^ &u) ^ private_b % n;
+    let verifier = srp_server
+        .process_reply(&private_b, &v, &public_a)
+        .expect("Failed to process reply");
 
-            println!("Premaster secret: {}", premaster_secret);
+    let second_step_client = ws.next().await.unwrap().unwrap();
+    let client_proof: Vec<u8> = serde_json::from_slice(&second_step_client.into_data())
+        .expect("Failed to deserialize client proof");
 
-            Ok(Json(LoginResponse { public_b }))
-        }
-        Err(_) => Err(ActionError::NotFound),
-    }
+    verifier
+        .verify_client(&client_proof)
+        .expect("Failed to verify client");
+
+    let second_step_server = SecondStepServer {
+        __type: "second_step_server".to_string(),
+        server_proof: verifier.proof(),
+    };
+
+    let second_step_server = serde_json::to_string(&second_step_server).unwrap();
+
+    ws.send(Message::Text(second_step_server))
+        .await
+        .expect("Failed to send second step (server) to client");
 }
 
 pub async fn create_password(

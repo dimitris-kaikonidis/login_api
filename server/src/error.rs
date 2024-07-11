@@ -9,7 +9,6 @@ use serde_json::json;
 pub enum ActionError {
     BadRequest,
     InternalServerError,
-    NotFound,
 }
 
 impl IntoResponse for ActionError {
@@ -17,7 +16,6 @@ impl IntoResponse for ActionError {
         let (status, error_message) = match self {
             ActionError::BadRequest => (StatusCode::BAD_REQUEST, ""),
             ActionError::InternalServerError => (StatusCode::INTERNAL_SERVER_ERROR, ""),
-            ActionError::NotFound => (StatusCode::NOT_FOUND, ""),
         };
 
         let body = Json(json!({
@@ -25,12 +23,6 @@ impl IntoResponse for ActionError {
         }));
 
         (status, body).into_response()
-    }
-}
-
-impl From<argon2::password_hash::Error> for ActionError {
-    fn from(_value: argon2::password_hash::Error) -> Self {
-        ActionError::InternalServerError
     }
 }
 

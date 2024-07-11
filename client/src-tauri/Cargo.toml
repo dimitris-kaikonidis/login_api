@@ -12,10 +12,10 @@ tauri-build = { version = "1.5.2", features = [] }
 
 [dependencies]
 tauri = { version = "1.6.8", features = ["shell-open"] }
-argon2 = "0.5.3"
 srp = "0.6.0"
 rand = { version = "0.8.5", features = ["getrandom"] }
 num-bigint = { version = "0.4.5", features = ["rand"] }
+blake2 = "0.10.6"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
