@@ -1,15 +1,28 @@
 /* @refresh reload */
-import { Component } from "solid-js";
+import { Component, ParentComponent } from "solid-js";
 import { render } from "solid-js/web";
-import { LoginForm, RegisterForm } from "./auth-form";
+import { LoginPage, RegisterPage } from "./auth-form";
+import { Route, Router } from "@solidjs/router";
 
-const App: Component = () => {
-  return (
-    <main class="h-screen flex flex-col justify-center items-center bg-sky-800">
-      <RegisterForm />
-      <LoginForm />
-    </main>
-  );
-};
+const App: ParentComponent = (props) => (
+  <main class="h-screen flex flex-col justify-center items-center bg-sky-800">
+    {props.children}
+  </main>
+);
 
-render(() => <App />, document.getElementById("root")!);
+const PasswordsPage: Component = () => (
+  <ul>
+    <li>test</li>
+  </ul>
+);
+
+render(
+  () => (
+    <Router root={App}>
+      <Route path="/" component={LoginPage} />
+      <Route path="/register" component={RegisterPage} />
+      <Route path="/passwords" component={PasswordsPage} />
+    </Router>
+  ),
+  document.getElementById("root")!,
+);

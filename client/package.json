@@ -10,6 +10,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@solidjs/router": "^0.14.1",
     "@tauri-apps/api": "^1.5.6",
     "solid-js": "^1.8.17"
   },
