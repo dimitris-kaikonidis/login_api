@@ -73,8 +73,14 @@ struct SecondStepServer<'a> {
 }
 
 pub async fn login_auth(mut ws: WebSocket, pool: Pool<ConnectionManager<PgConnection>>) {
-    let user_id = ws.next().await.unwrap().unwrap();
-    let user_id = user_id.to_text().unwrap();
+    let user_id = ws
+        .next()
+        .await
+        .expect("WS: user_id is None")
+        .expect("WS: user_id results to Err");
+    let user_id = user_id
+        .to_text()
+        .expect("Failed to convert user id to text");
     let user_id = serde_json::from_str::<UserID>(user_id).expect("Invalid JSON (UserEmail)");
 
     let connection = &mut pool.get().expect("Failed to connect to database");
@@ -96,13 +102,18 @@ pub async fn login_auth(mut ws: WebSocket, pool: Pool<ConnectionManager<PgConnec
         salt: &salt,
         public_b: &public_b,
     };
-    let first_step_server = serde_json::to_string(&first_step_server).unwrap();
+    let first_step_server =
+        serde_json::to_string(&first_step_server).expect("Failed to serialize first step server");
 
     ws.send(Message::Text(first_step_server))
         .await
-        .expect("Failed to send first step (server) to client");
+        .expect("Failed to send first step server to client");
 
-    let public_a = ws.next().await.unwrap().unwrap();
+    let public_a = ws
+        .next()
+        .await
+        .expect("WS: public_a is None")
+        .expect("WS: public_a results to Err");
     let public_a = serde_json::from_slice::<Vec<u8>>(&public_a.into_data())
         .expect("Failed to deserialize public_a");
 
@@ -110,7 +121,12 @@ pub async fn login_auth(mut ws: WebSocket, pool: Pool<ConnectionManager<PgConnec
         .process_reply(&private_b, &v, &public_a)
         .expect("Failed to process reply");
 
-    let second_step_client = ws.next().await.unwrap().unwrap();
+    let second_step_client = ws
+        .next()
+        .await
+        .expect("WS: second_step_client is None")
+        .expect("WS: second_step_client results to Err");
+
     let client_proof: Vec<u8> = serde_json::from_slice(&second_step_client.into_data())
         .expect("Failed to deserialize client proof");
 
@@ -122,12 +138,14 @@ pub async fn login_auth(mut ws: WebSocket, pool: Pool<ConnectionManager<PgConnec
         __type: "second_step_server".to_string(),
         server_proof: verifier.proof(),
     };
-
-    let second_step_server = serde_json::to_string(&second_step_server).unwrap();
+    let second_step_server =
+        serde_json::to_string(&second_step_server).expect("Failed to serialize second step server");
 
     ws.send(Message::Text(second_step_server))
         .await
-        .expect("Failed to send second step (server) to client");
+        .expect("Failed to send second step server to client");
+
+    ws.close().await.expect("Failed to close connection");
 }
 
 pub async fn create_password(
