@@ -22,8 +22,7 @@ impl<'a> Client<'a> {
     }
 }
 
-#[tauri::command]
-fn create_salt_and_verifier(username: &str, password: &str) -> (Vec<u8>, Vec<u8>) {
+pub fn create_verifier_and_salt(username: &str, password: &str) -> (Vec<u8>, Vec<u8>) {
     let mut salt = [0u8; 32];
     let mut rng = rand::rngs::OsRng;
     rng.fill_bytes(&mut salt);
@@ -31,11 +30,10 @@ fn create_salt_and_verifier(username: &str, password: &str) -> (Vec<u8>, Vec<u8>
 
     let v = srp_client.compute_verifier(username.as_bytes(), password.as_bytes(), &salt);
 
-    (salt.to_vec(), v)
+    (v, salt.to_vec())
 }
 
-#[tauri::command]
-fn public_a(state: tauri::State<Client>) -> Vec<u8> {
+fn public_a(state: Client) -> Vec<u8> {
     let mut private_a = [0u8; 32];
     let mut rng = rand::rngs::OsRng;
     rng.fill_bytes(&mut private_a);
@@ -50,13 +48,12 @@ fn public_a(state: tauri::State<Client>) -> Vec<u8> {
     public_a
 }
 
-#[tauri::command]
 fn compute_verifier(
     username: &str,
     password: &str,
     salt: Vec<u8>,
     public_b: Vec<u8>,
-    state: tauri::State<Client>,
+    state: Client,
 ) -> Vec<u8> {
     let verifier = state
         .srp_client
@@ -78,8 +75,7 @@ fn compute_verifier(
     proof
 }
 
-#[tauri::command]
-fn verify_server_proof(server_proof: Vec<u8>, state: tauri::State<Client>) -> Result<(), String> {
+fn verify_server_proof(server_proof: Vec<u8>, state: Client) -> Result<(), String> {
     let verifier = state.verifier.lock().unwrap();
 
     match verifier.as_ref() {
@@ -92,17 +88,4 @@ fn verify_server_proof(server_proof: Vec<u8>, state: tauri::State<Client>) -> Re
         }
         None => Err("No verifier found".to_string()),
     }
-}
-
-fn main() {
-    tauri::Builder::default()
-        .manage(Client::new())
-        .invoke_handler(tauri::generate_handler![
-            create_salt_and_verifier,
-            public_a,
-            compute_verifier,
-            verify_server_proof
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
 }

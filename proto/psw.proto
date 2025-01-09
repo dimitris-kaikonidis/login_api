@@ -1,0 +1,16 @@
+syntax = "proto3";
+package psw;
+
+message RegisterRequest {
+  string email = 1;
+  bytes salt = 2;
+  bytes verifier = 3;
+}
+
+message RegisterResponse {
+  int32 statusCode = 1;
+}
+
+service PasswordManager {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+}

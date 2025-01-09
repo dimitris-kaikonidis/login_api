@@ -2,12 +2,11 @@
 name = "server"
 version = "0.1.0"
 edition = "2021"
-default-run = "server"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = { version = "0.7.5", features = ["ws"] }
+axum = { version = "0.8.0", features = ["ws"] }
 tokio = { version = "1.38.0", features = ["full"] }
 diesel = { version = "2.2.1", features = ["postgres", "r2d2"] }
 dotenvy = "0.15.7"
@@ -24,3 +23,9 @@ futures = "0.3.30"
 futures-util = { version = "0.3.30", features = ["sink", "std"] }
 blake2 = "0.10.6"
 serde_bytes = "0.11"
+redis = { version = "0.26.1", features = ["tokio-rustls-comp"] }
+tonic = "0.12.3"
+prost = "0.13.4"
+
+[build-dependencies]
+tonic-build = "0.12.3"

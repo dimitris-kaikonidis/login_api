@@ -1,20 +1,18 @@
-use actions::{create_password, login_connection, register};
-use axum::{
-    http::{header::CONTENT_TYPE, HeaderValue, Method},
-    routing::{get, post},
-    Router,
-};
+use actions::PasswordManagerService;
 use diesel::{
     r2d2::{ConnectionManager, Pool},
     PgConnection,
 };
-use std::net::SocketAddr;
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use psw::password_manager_server::PasswordManagerServer;
+use tonic::transport::Server;
 
 mod actions;
 mod error;
 mod models;
 mod schema;
+mod psw {
+    tonic::include_proto!("psw");
+}
 
 fn connection_pool() -> Pool<ConnectionManager<PgConnection>> {
     dotenvy::dotenv().ok();
@@ -30,27 +28,15 @@ fn connection_pool() -> Pool<ConnectionManager<PgConnection>> {
 
 #[tokio::main]
 async fn main() {
-    let pool = connection_pool();
+    let password_manager = PasswordManagerService {
+        pool: connection_pool(),
+    };
+    let psw = PasswordManagerServer::new(password_manager);
+    let addr = "0.0.0.0:3000".parse().unwrap();
 
-    let cors = CorsLayer::new()
-        .allow_headers([CONTENT_TYPE])
-        .allow_methods([Method::GET, Method::POST])
-        .allow_origin("http://localhost:1420".parse::<HeaderValue>().unwrap());
-
-    let app = Router::new()
-        .route("/register", post(register))
-        .route("/login", get(login_connection))
-        .route("/create_password", post(create_password))
-        .with_state(pool)
-        .layer(cors)
-        .layer(TraceLayer::new_for_http());
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("Listening on: http://{}", listener.local_addr().unwrap());
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
-    .unwrap()
+    Server::builder()
+        .add_service(psw)
+        .serve(addr)
+        .await
+        .unwrap();
 }
