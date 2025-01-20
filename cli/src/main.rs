@@ -1,16 +1,8 @@
-use clap::{Command, Parser};
+use actions::{login, register};
+use clap::Command;
 use psw::password_manager_client::PasswordManagerClient;
-use psw::RegisterRequest;
-use rpassword::read_password;
-use serde_email::Email;
-use srp::create_verifier_and_salt;
-use tonic::Request;
-
-#[derive(Parser, Debug)]
-struct Args {}
 
 mod actions;
-mod srp;
 mod psw {
     tonic::include_proto!("psw");
 }
@@ -25,33 +17,16 @@ async fn main() {
         .about("Password Manager CLI")
         .subcommand_required(true)
         .arg_required_else_help(true)
-        .subcommands([Command::new("register").about("Register user.")]);
+        .subcommands([
+            Command::new("register").about("Register user."),
+            Command::new("login").about("Login user."),
+        ]);
 
     let matches = cli.get_matches();
 
     match matches.subcommand() {
-        Some(("register", _sub_matches)) => {
-            let mut email = String::new();
-            println!("Enter email: ");
-            std::io::stdin()
-                .read_line(&mut email)
-                .expect("Failed to read email");
-            let email = Email::from_str(email.trim()).expect("Enter a valid email address");
-
-            println!("Enter password: ");
-            let password = read_password().expect("Failed to read password");
-
-            let (salt, verifier) = create_verifier_and_salt(email.as_str(), &password);
-
-            client
-                .register(Request::new(RegisterRequest {
-                    email: email.to_string(),
-                    verifier,
-                    salt,
-                }))
-                .await
-                .unwrap();
-        }
+        Some(("register", _sub_matches)) => register(&mut client).await,
+        Some(("login", _sub_matches)) => login(&mut client).await,
         _ => unreachable!(),
     }
 }

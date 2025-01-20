@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use actions::PasswordManagerService;
 use diesel::{
     r2d2::{ConnectionManager, Pool},
@@ -7,7 +9,6 @@ use psw::password_manager_server::PasswordManagerServer;
 use tonic::transport::Server;
 
 mod actions;
-mod error;
 mod models;
 mod schema;
 mod psw {
@@ -29,7 +30,7 @@ fn connection_pool() -> Pool<ConnectionManager<PgConnection>> {
 #[tokio::main]
 async fn main() {
     let password_manager = PasswordManagerService {
-        pool: connection_pool(),
+        pool: Arc::new(Mutex::new(connection_pool())),
     };
     let psw = PasswordManagerServer::new(password_manager);
     let addr = "0.0.0.0:3000".parse().unwrap();
