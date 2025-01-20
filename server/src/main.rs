@@ -1,11 +1,11 @@
-use std::sync::{Arc, Mutex};
-
 use actions::PasswordManagerService;
 use diesel::{
     r2d2::{ConnectionManager, Pool},
     PgConnection,
 };
 use psw::password_manager_server::PasswordManagerServer;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tonic::transport::Server;
 
 mod actions;

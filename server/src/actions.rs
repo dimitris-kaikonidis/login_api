@@ -20,16 +20,12 @@ use diesel::{
 };
 use rand::RngCore;
 use srp::{groups::G_4096, server::SrpServer};
-use std::{
-    pin::Pin,
-    sync::{Arc, Mutex},
-};
-use tokio::sync::mpsc;
-use tokio_stream::{wrappers::ReceiverStream, Stream, StreamExt};
+use std::sync::Arc;
+use tokio::sync::{mpsc, Mutex};
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 
 type LoginResult<T> = Result<Response<T>, Status>;
-type LoginResponseStream = Pin<Box<dyn Stream<Item = Result<LoginResponse, Status>> + Send>>;
 
 #[derive(Debug)]
 pub struct PasswordManagerService {
@@ -38,7 +34,7 @@ pub struct PasswordManagerService {
 
 #[tonic::async_trait]
 impl PasswordManager for PasswordManagerService {
-    type LoginStream = LoginResponseStream;
+    type LoginStream = ReceiverStream<Result<LoginResponse, Status>>;
 
     async fn register(
         &self,
@@ -47,7 +43,7 @@ impl PasswordManager for PasswordManagerService {
         let connection = &mut self
             .pool
             .lock()
-            .unwrap()
+            .await
             .get()
             .map_err(|e| Status::internal(format!("Failed to connect to database: {}", e)))?;
         let stream = req.into_inner();
@@ -68,79 +64,75 @@ impl PasswordManager for PasswordManagerService {
     async fn login(&self, req: Request<Streaming<LoginRequest>>) -> LoginResult<Self::LoginStream> {
         let mut connection = Arc::clone(&self.pool)
             .lock()
-            .expect("Mutex error occured.")
+            .await
             .get()
             .map_err(|e| Status::internal(format!("Failed to connect to database: {}", e)))?;
 
         let (tx, rx) = mpsc::channel(128);
-
-        let mut private_b = [0u8; 32];
-        let mut rng = rand::rngs::OsRng;
-        rng.fill_bytes(&mut private_b);
         let srp_server = SrpServer::<Blake2b512>::new(&G_4096);
-        let mut v: Vec<u8> = Vec::new();
+        let mut stream: Streaming<LoginRequest> = req.into_inner();
 
         tokio::spawn(async move {
-            let mut stream: Streaming<LoginRequest> = req.into_inner();
+            let mut private_b = [0u8; 32];
+            let mut rng = rand::rngs::OsRng;
+            rng.fill_bytes(&mut private_b);
+            let mut v: Vec<u8> = Vec::new();
 
-            while let Some(incoming_stream) = stream.next().await {
-                match incoming_stream {
-                    Ok(stream) => {
-                        match stream.request {
-                            Some(login_request::Request::LoginRequestPartOne(payload)) => {
-                                let db_result = users_table
-                                    .filter(email_column.eq(payload.email))
-                                    .select((salt_column, verifier_column))
-                                    .get_result::<(Vec<u8>, Vec<u8>)>(&mut connection)
-                                    .expect("User not found");
-                                v = db_result.1;
+            if let Some(login_request::Request::LoginRequestPartOne(request)) =
+                stream.message().await.unwrap().unwrap().request
+            {
+                let db_result = users_table
+                    .filter(email_column.eq(request.email))
+                    .select((salt_column, verifier_column))
+                    .get_result::<(Vec<u8>, Vec<u8>)>(&mut connection)
+                    .expect("User not found");
+                v = db_result.1;
 
-                                println!("{:?}", v);
+                tx.send(Ok(LoginResponse {
+                    response: Some(login_response::Response::LoginResponsePartOne(
+                        LoginResponsePartOne {
+                            status_code: 200,
+                            public_b: srp_server.compute_public_ephemeral(&private_b, &v),
+                            salt: db_result.0,
+                        },
+                    )),
+                }))
+                .await
+                .map_err(|e| {
+                    Status::internal(format!("Failed to send login response. (Part one) {}", e))
+                })
+                .unwrap();
 
-                                tx.send(Ok(LoginResponse {
-                                    response: Some(login_response::Response::LoginResponsePartOne(
-                                        LoginResponsePartOne {
-                                            status_code: 200,
-                                            public_b: srp_server
-                                                .compute_public_ephemeral(&private_b, &v),
-                                            salt: db_result.0,
-                                        },
-                                    )),
-                                }))
-                                .await
-                                .unwrap();
-                            }
-                            Some(login_request::Request::LoginRequestPartTwo(payload)) => {
-                                let verifier = srp_server
-                                    .process_reply(&private_b, &v, &payload.public_a)
-                                    .expect("Failed to process reply");
+                println!("part one");
+            }
 
-                                println!("{:?} {:?}", v, payload.public_a);
+            if let Some(login_request::Request::LoginRequestPartTwo(payload)) =
+                stream.message().await.unwrap().unwrap().request
+            {
+                let verifier = srp_server
+                    .process_reply(&private_b, &v, &payload.public_a)
+                    .expect("Failed to process reply");
 
-                                verifier
-                                    .verify_client(&payload.client_proof)
-                                    .expect("Failed to verify client");
+                verifier
+                    .verify_client(&payload.client_proof)
+                    .expect("Failed to verify client");
 
-                                tx.send(Ok(LoginResponse {
-                                    response: Some(login_response::Response::LoginResponsePartTwo(
-                                        LoginResponsePartTwo {
-                                            status_code: 200,
-                                            server_proof: verifier.proof().to_vec(),
-                                        },
-                                    )),
-                                }))
-                                .await
-                                .unwrap();
-                            }
-                            None => todo!(),
-                        };
-                    }
-                    Err(error) => println!("error"),
-                }
+                tx.send(Ok(LoginResponse {
+                    response: Some(login_response::Response::LoginResponsePartTwo(
+                        LoginResponsePartTwo {
+                            status_code: 200,
+                            server_proof: verifier.proof().to_vec(),
+                        },
+                    )),
+                }))
+                .await
+                .unwrap();
+
+                println!("part two");
             }
         });
 
-        Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
+        Ok(Response::new(ReceiverStream::new(rx)))
     }
 }
 

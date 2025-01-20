@@ -10,9 +10,8 @@ use srp::{
     client::{SrpClient, SrpClientVerifier},
     groups::G_4096,
 };
-use tokio_stream::StreamExt;
-use tonic::transport::Channel;
-use tonic::Request;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::{transport::Channel, Request};
 
 fn get_credentials() -> (String, String) {
     let mut email = String::new();
@@ -60,19 +59,33 @@ pub async fn login(client: &mut PasswordManagerClient<Channel>) {
     let srp_client = SrpClient::<Blake2b512>::new(&G_4096);
     let mut verifier: Option<SrpClientVerifier<Blake2b512>> = None;
 
-    // Part One
-    let stream = tokio_stream::once(LoginRequest {
+    let (tx, rx) = tokio::sync::mpsc::channel::<LoginRequest>(128);
+
+    let stream = ReceiverStream::new(rx);
+    let request = Request::new(stream);
+    let mut response = client
+        .login(request)
+        .await
+        .expect("Failed to create response stream.")
+        .into_inner();
+
+    tx.send(LoginRequest {
         request: Some(login_request::Request::LoginRequestPartOne(
             LoginRequestPartOne {
                 email: email.clone(),
             },
         )),
-    });
+    })
+    .await
+    .expect("Failed to send first login request.");
 
-    let mut response = client.login(stream).await.unwrap().into_inner();
-    let login_response_part_one = response.next().await.unwrap().unwrap().response;
-
-    if let Some(login_response::Response::LoginResponsePartOne(payload)) = login_response_part_one {
+    if let Some(login_response::Response::LoginResponsePartOne(payload)) = response
+        .message()
+        .await
+        .expect("Server failed to respond. (Part one)")
+        .expect("Empty server response. (Part one)")
+        .response
+    {
         verifier = Some(
             srp_client
                 .process_reply(
@@ -84,26 +97,30 @@ pub async fn login(client: &mut PasswordManagerClient<Channel>) {
                 )
                 .expect("Failed to create client verifier."),
         );
+
+        tx.send(LoginRequest {
+            request: Some(login_request::Request::LoginRequestPartTwo(
+                LoginRequestPartTwo {
+                    public_a: srp_client.compute_public_ephemeral(&private_a),
+                    client_proof: verifier
+                        .as_mut()
+                        .expect("Uninitialized verifier.")
+                        .proof()
+                        .to_vec(),
+                },
+            )),
+        })
+        .await
+        .expect("Failed to send second login request.");
     }
 
-    // Part Two
-    let stream = tokio_stream::once(LoginRequest {
-        request: Some(login_request::Request::LoginRequestPartTwo(
-            LoginRequestPartTwo {
-                public_a: srp_client.compute_public_ephemeral(&private_a),
-                client_proof: verifier
-                    .as_mut()
-                    .expect("Uninitialized verifier.")
-                    .proof()
-                    .to_vec(),
-            },
-        )),
-    });
-
-    let mut response = client.login(stream).await.unwrap().into_inner();
-    let login_response_part_two = response.next().await.unwrap().unwrap().response;
-
-    if let Some(login_response::Response::LoginResponsePartTwo(payload)) = login_response_part_two {
+    if let Some(login_response::Response::LoginResponsePartTwo(payload)) = response
+        .message()
+        .await
+        .expect("Server failed to respond. (Part two)")
+        .expect("Empty server response. (Part two)")
+        .response
+    {
         match verifier
             .expect("Uninitialized verifier.")
             .verify_server(&payload.server_proof)
